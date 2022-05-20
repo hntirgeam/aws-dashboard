@@ -4,7 +4,8 @@ from pprint import pp
 from typing import Any, Dict, List, Tuple, Union
 
 import boto3
-from colorama import Back, Fore, Style
+import click
+from colorama import Fore, Style
 from colorama import init as windows_color_init
 from dateutil import parser
 from tabulate import tabulate
@@ -50,12 +51,9 @@ def _get_correct_state_key(instance_data: Dict) -> Union[str, datetime]:
 def td_format(td_object):
     seconds = int(td_object.total_seconds())
     periods = [
-        ("year", 60 * 60 * 24 * 365),
-        ("month", 60 * 60 * 24 * 30),
         ("day", 60 * 60 * 24),
         ("hour", 60 * 60),
         ("minute", 60),
-        ("second", 1),
     ]
     strings = []
     for period_name, period_seconds in periods:
