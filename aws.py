@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Tuple, Union
 
 import boto3
 import click
-from colorama import Fore, Style
+from colorama import Back, Fore, Style
 from colorama import init as windows_color_init
 from dateutil import parser
 from tabulate import tabulate
@@ -15,7 +15,10 @@ windows_color_init()  # He he...
 STATE_CODE_STOPPED = 80
 STATE_CODE_RUNNING = 16
 
+NONE_STR = "<None>"
+
 INSTANCES_TABLE_HEADERS = ("Name", "State", "State Time", "Public IP", "Env")
+INSTANCES_TABLE_HEADERS = [Fore.BLACK + Back.CYAN + header + Style.RESET_ALL for header in INSTANCES_TABLE_HEADERS]
 
 
 def make_it_shine(color, sad_string) -> str:
@@ -24,7 +27,7 @@ def make_it_shine(color, sad_string) -> str:
 
 
 def get_instance_tags(tags: List) -> Dict[str, str]:
-    parsed_tags = {"Name": None, "environment": None}
+    parsed_tags = {"Name": NONE_STR, "environment": NONE_STR}
     for tag in tags:
         parsed_tags[tag["Key"]] = tag["Value"]
 
@@ -90,12 +93,34 @@ def parse_instance_data(instance_data: Dict) -> List:
 
     correct_state_time = _get_correct_state_key(instance_data=instance_data)
     state_time = get_instance_state_time(correct_state_time, state_code)
+
     ip_addr = instance_data.get("PublicIpAddress")
-    public_ip_addr = ip_addr if ip_addr else "None"
+    public_ip_addr = ip_addr if ip_addr else NONE_STR
 
     row = [instance_name, state_name, state_time, public_ip_addr, instance_env]
 
     return row
+
+
+def sort_parsed_data(data: List[List], sort_by, env) -> List[List]:
+    from operator import itemgetter
+
+    filtered_data = []
+
+    if env != "all":
+        for item in data:
+            if item[0].find(env) != -1:
+                filtered_data.append(item)
+
+    else:
+        filtered_data = data
+
+    if sort_by == "name":
+        return sorted(filtered_data, key=itemgetter(0))
+    if sort_by == "state":
+        return sorted(filtered_data, key=itemgetter(1))
+    if sort_by == "env":
+        return sorted(filtered_data, key=itemgetter(4))
 
 
 def parse_api_data(data: Dict) -> List[List]:
@@ -107,17 +132,34 @@ def parse_api_data(data: Dict) -> List[List]:
     return instances_data
 
 
-def show_parsed_data(data: List[List]) -> None:
+def show_parsed_ec2_data(data: List[List]) -> None:
     print(tabulate(data, INSTANCES_TABLE_HEADERS, tablefmt="psql"))
 
 
-if __name__ == "__main__":
-    ec2 = boto3.client("ec2")
-    rds = boto3.client("rds")
-
+def status(ec2, rds, sort_by: str, env: str) -> None:
     described_instances: Dict = ec2.describe_instances()
+
     ec2_data = described_instances.get("Reservations")
 
     if ec2_data:
         parsed_data = parse_api_data(ec2_data)
-        show_parsed_data(parsed_data)
+        parsed_data = sort_parsed_data(parsed_data, sort_by, env)
+        show_parsed_ec2_data(parsed_data)
+
+
+@click.command()
+@click.option("--action", default="status", help="Actions")
+@click.option("--sort", default="name", help="Table sorting. Options: name, state, env")
+@click.option(
+    "--env", default="all", help="List only instacies that match required env. Options: all, prod, dev, stage"
+)
+def main(action, sort, env):
+    ec2 = boto3.client("ec2")
+    rds = boto3.client("rds")
+
+    if action == "status":
+        status(ec2, rds, sort, env)
+
+
+if __name__ == "__main__":
+    main()
