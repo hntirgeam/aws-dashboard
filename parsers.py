@@ -1,12 +1,11 @@
 import re
 from datetime import datetime, timedelta, timezone
+from operator import itemgetter
 from typing import Dict, List, Tuple, Union
 
 from colorama import Back, Fore, Style
 from dateutil import parser
 from tabulate import tabulate
-from operator import itemgetter
-
 
 STATE_CODE_STOPPED = 80
 STATE_CODE_RUNNING = 16
@@ -67,21 +66,21 @@ def sort_parsed_data(data: List[List], order_by: str, env: str, rds: bool = Fals
     return sorted(filtered_data, key=itemgetter(order_key), reverse=True)
 
 
-class EC2Parser:
-    def __init__(self, ec2) -> None:
+class EC2Service:
+    def __init__(self, ec2, color: bool) -> None:
         self.ec2 = ec2
-
-    def status(self, order_by: str, env: str, color: bool, tablefmt: str):
         self.color = color
-        self.tablefmt = tablefmt
 
+    def parse_data(self):
         described_instances: Dict = self.ec2.describe_instances()
         ec2_data = described_instances.get("Reservations")
 
         if ec2_data:
-            parsed_data = self._parse_api_data(ec2_data)
-            parsed_data = sort_parsed_data(parsed_data, order_by, env)
-            self._show_parsed_data(parsed_data)
+            return self._parse_api_data(ec2_data)
+
+    def show_parsed_data(self, data: List[List], tablefmt: str) -> None:
+        header = INSTANCES_TABLE_HEADERS_FANCY if self.color else INSTANCES_TABLE_HEADERS
+        print(tabulate(data, header, tablefmt=tablefmt))
 
     def _parse_api_data(self, data: Dict) -> List[List]:
         instances_data = []
@@ -90,10 +89,6 @@ class EC2Parser:
                 instances_data.append(self._parse_instance_data(instance))
 
         return instances_data
-
-    def _show_parsed_data(self, data: List[List]) -> None:
-        header = INSTANCES_TABLE_HEADERS_FANCY if self.color else INSTANCES_TABLE_HEADERS
-        print(tabulate(data, header, tablefmt=self.tablefmt))
 
     def _parse_instance_data(self, instance_data: Dict) -> List:
         instance_id = instance_data.get("InstanceId")
@@ -153,22 +148,18 @@ class EC2Parser:
         return "No Info"
 
 
-class RDSParser:
-    def __init__(self, rds) -> None:
+class RDSService:
+    def __init__(self, rds, color: bool) -> None:
         self.rds = rds
-
-    def status(self, order_by: str, env: str, color: bool, tablefmt: str):
         self.color = color
-        self.tablefmt = tablefmt
 
+    def parse_data(self):
         described_db_instances: Dict = self.rds.describe_db_instances()
 
         rds_data = described_db_instances.get("DBInstances")
 
         if rds_data:
-            parsed_data = self._parse_rds_api_data(rds_data)
-            parsed_data = sort_parsed_data(parsed_data, order_by, env, rds=True)
-            self._show_parsed_rds_data(parsed_data)
+            return self._parse_rds_api_data(rds_data)
 
     def _parse_rds_api_data(self, data: Dict) -> List[List]:
         db_instances_data = []
@@ -177,9 +168,9 @@ class RDSParser:
 
         return db_instances_data
 
-    def _show_parsed_rds_data(self, data: List[List]) -> None:
+    def show_parsed_data(self, data: List[List], tablefmt: str) -> None:
         header = DB_INSTANCES_TABLE_HEADERS_FANCY if self.color else DB_INSTANCES_TABLE_HEADERS
-        print(tabulate(data, header, tablefmt=self.tablefmt))
+        print(tabulate(data, header, tablefmt=tablefmt))
 
     def _parse_db_instance_data(self, instance_data: Dict) -> List:
         instance_name = instance_data.get("DBInstanceIdentifier")
