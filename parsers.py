@@ -86,10 +86,15 @@ class EC2Service:
             sys.exit(-1)
         return self._parse_api_data(ec2_data)
 
-    def show_parsed_data(self, data: List[List], tablefmt: str) -> None:
+    def show_parsed_data(self, data: List[List], tablefmt: str, sh: bool, separ: str) -> None:
         """Prints parsed data as table or as shell-compatible string."""
-        header = INSTANCES_TABLE_HEADERS_FANCY if self.color else INSTANCES_TABLE_HEADERS
-        print(tabulate(data, header, tablefmt=tablefmt))
+        if not sh:
+            header = INSTANCES_TABLE_HEADERS_FANCY if self.color else INSTANCES_TABLE_HEADERS
+            print(tabulate(data, header, tablefmt=tablefmt))
+            return
+        
+        for instance_data in data:
+            print(f"{separ}".join(instance_data))
 
     def _parse_api_data(self, data: Dict) -> List[List]:
         instances_data = []
@@ -181,17 +186,22 @@ class RDSService:
 
         return db_instances_data
 
-    def show_parsed_data(self, data: List[List], tablefmt: str) -> None:
+    def show_parsed_data(self, data: List[List], tablefmt: str, sh: bool, separ: str) -> None:
         """Prints parsed data as table or as shell-compatible string."""
-        header = DB_INSTANCES_TABLE_HEADERS_FANCY if self.color else DB_INSTANCES_TABLE_HEADERS
-        print(tabulate(data, header, tablefmt=tablefmt))
+        if not sh:
+            header = DB_INSTANCES_TABLE_HEADERS_FANCY if self.color else DB_INSTANCES_TABLE_HEADERS
+            print(tabulate(data, header, tablefmt=tablefmt))
+            return
+        
+        for instance_data in data:
+            print(f"{separ}".join(instance_data))
 
     def _parse_db_instance_data(self, instance_data: Dict) -> List:
         instance_name = instance_data.get("DBInstanceIdentifier")
         state = self._get_db_instance_state(instance_data.get("DBInstanceStatus"))
         instance_address, instance_port = self._get_instance_endpoint(instance_data.get("Endpoint"))
 
-        row = [instance_name, state, instance_address, instance_port]
+        row = [instance_name, state, instance_address, str(instance_port)]
         return row
 
     def _get_db_instance_state(self, state: str) -> str:
