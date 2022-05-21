@@ -1,6 +1,7 @@
 import re
 from datetime import datetime, timedelta, timezone
 from operator import itemgetter
+import sys
 from typing import Dict, List, Tuple, Union
 
 from colorama import Back, Fore, Style
@@ -25,11 +26,13 @@ DB_INSTANCES_TABLE_HEADERS_FANCY = [Fore.BLACK + Back.CYAN + h + Style.RESET_ALL
 
 
 def make_it_shine(color, sad_string) -> str:
+    """Makes happy string from sad strings (adding color)."""
     happy_string = color + sad_string + Style.RESET_ALL
     return happy_string
 
 
 def td_format(td_object):
+    """Because timedelta object from datetime module does not have strpftfrtftprptime function I need to use this."""
     seconds = int(td_object.total_seconds())
     periods = [
         ("day", 60 * 60 * 24),
@@ -41,11 +44,12 @@ def td_format(td_object):
         if seconds > period_seconds:
             period_value, seconds = divmod(seconds, period_seconds)
             has_s = "s" if period_value > 1 else ""
-            strings.append("%s %s%s" % (period_value, period_name, has_s))
+            strings.append(f"{period_value} {period_name}{has_s}")
     return " ".join(strings)
 
 
 def sort_parsed_data(data: List[List], order_by: str, env: str, rds: bool = False) -> List[List]:
+    """Sorts parsed data for both EC2 and RDS instancies."""
     filtered_data = []
 
     header = INSTANCES_TABLE_HEADERS if not rds else DB_INSTANCES_TABLE_HEADERS
@@ -67,18 +71,23 @@ def sort_parsed_data(data: List[List], order_by: str, env: str, rds: bool = Fals
 
 
 class EC2Service:
+    """EC2 Service class that has methods to parse and show data."""
+
     def __init__(self, ec2, color: bool) -> None:
         self.ec2 = ec2
         self.color = color
 
     def parse_data(self):
+        """Parses data using boto3 instance. Parses it according to settings."""
         described_instances: Dict = self.ec2.describe_instances()
         ec2_data = described_instances.get("Reservations")
 
-        if ec2_data:
-            return self._parse_api_data(ec2_data)
+        if not ec2_data:
+            sys.exit(-1)
+        return self._parse_api_data(ec2_data)
 
     def show_parsed_data(self, data: List[List], tablefmt: str) -> None:
+        """Prints parsed data as table or as shell-compatible string."""
         header = INSTANCES_TABLE_HEADERS_FANCY if self.color else INSTANCES_TABLE_HEADERS
         print(tabulate(data, header, tablefmt=tablefmt))
 
@@ -121,8 +130,8 @@ class EC2Service:
         state_code = state.get("Code")
 
         if self.color:
-            on: bool = True if state_code == STATE_CODE_RUNNING else False
-            state_name = make_it_shine(Fore.GREEN, state_name) if on else make_it_shine(Fore.RED, state_name)
+            is_on: bool = state_code == STATE_CODE_RUNNING
+            state_name = make_it_shine(Fore.GREEN, state_name) if is_on else make_it_shine(Fore.RED, state_name)
 
         return (state_name, state_code)
 
@@ -137,7 +146,7 @@ class EC2Service:
             running_time: timedelta = datetime.now(timezone.utc) - time
             return td_format(running_time)
 
-        elif state_code == STATE_CODE_STOPPED:
+        if state_code == STATE_CODE_STOPPED:
             pattern = r"^.*\((.*)\).*$"
             match = re.search(pattern, time)
             regex_match = match.group(1)
@@ -149,19 +158,23 @@ class EC2Service:
 
 
 class RDSService:
+    """RDS Service class that has methods to parse and show data."""
+
     def __init__(self, rds, color: bool) -> None:
         self.rds = rds
         self.color = color
 
     def parse_data(self):
+        """Parses data using boto3 instance. Parses it according to settings."""
         described_db_instances: Dict = self.rds.describe_db_instances()
 
         rds_data = described_db_instances.get("DBInstances")
 
-        if rds_data:
-            return self._parse_rds_api_data(rds_data)
+        if not rds_data:
+            sys.exit(-1)
+        return self._parse_api_data(rds_data)
 
-    def _parse_rds_api_data(self, data: Dict) -> List[List]:
+    def _parse_api_data(self, data: Dict) -> List[List]:
         db_instances_data = []
         for instance in data:
             db_instances_data.append(self._parse_db_instance_data(instance))
@@ -169,6 +182,7 @@ class RDSService:
         return db_instances_data
 
     def show_parsed_data(self, data: List[List], tablefmt: str) -> None:
+        """Prints parsed data as table or as shell-compatible string."""
         header = DB_INSTANCES_TABLE_HEADERS_FANCY if self.color else DB_INSTANCES_TABLE_HEADERS
         print(tabulate(data, header, tablefmt=tablefmt))
 
@@ -182,8 +196,8 @@ class RDSService:
 
     def _get_db_instance_state(self, state: str) -> str:
         if self.color:
-            on: bool = True if state == DB_STATE_RUNNING else False
-            state = make_it_shine(Fore.GREEN, state) if on else make_it_shine(Fore.RED, state)
+            is_on: bool = state == DB_STATE_RUNNING
+            state = make_it_shine(Fore.GREEN, state) if is_on else make_it_shine(Fore.RED, state)
         return state
 
     def _get_instance_endpoint(self, endpoint_data: Dict) -> Tuple[str, int]:
