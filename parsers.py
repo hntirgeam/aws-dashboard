@@ -1,0 +1,199 @@
+import re
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Tuple, Union
+
+from colorama import Back, Fore, Style
+from dateutil import parser
+from tabulate import tabulate
+from operator import itemgetter
+
+
+STATE_CODE_STOPPED = 80
+STATE_CODE_RUNNING = 16
+
+DB_STATE_STOPPED = "stopped"
+DB_STATE_RUNNING = "available"
+
+NONE_STR = "<None>"
+
+INSTANCES_TABLE_HEADERS = ("Name", "State", "State Time", "Public IP", "Env", "Id")
+DB_INSTANCES_TABLE_HEADERS = ("Name", "State", "Address", "Port")
+
+AVAILABLE_SORTING_RULES = INSTANCES_TABLE_HEADERS + DB_INSTANCES_TABLE_HEADERS
+
+INSTANCES_TABLE_HEADERS_FANCY = [Fore.BLACK + Back.CYAN + h + Style.RESET_ALL for h in INSTANCES_TABLE_HEADERS]
+DB_INSTANCES_TABLE_HEADERS_FANCY = [Fore.BLACK + Back.CYAN + h + Style.RESET_ALL for h in DB_INSTANCES_TABLE_HEADERS]
+
+
+def make_it_shine(color, sad_string) -> str:
+    happy_string = color + sad_string + Style.RESET_ALL
+    return happy_string
+
+
+def td_format(td_object):
+    seconds = int(td_object.total_seconds())
+    periods = [
+        ("day", 60 * 60 * 24),
+        ("hour", 60 * 60),
+        ("minute", 60),
+    ]
+    strings = []
+    for period_name, period_seconds in periods:
+        if seconds > period_seconds:
+            period_value, seconds = divmod(seconds, period_seconds)
+            has_s = "s" if period_value > 1 else ""
+            strings.append("%s %s%s" % (period_value, period_name, has_s))
+    return " ".join(strings)
+
+
+def sort_parsed_data(data: List[List], order_by: str, env: str, rds: bool = False) -> List[List]:
+    filtered_data = []
+
+    header = INSTANCES_TABLE_HEADERS if not rds else DB_INSTANCES_TABLE_HEADERS
+    header_inxed = "Env" if not rds else "Address"
+
+    if env != "all":
+        for item in data:
+            if item[header.index(header_inxed)].find(env) != -1:
+                filtered_data.append(item)
+    else:
+        filtered_data = data
+
+    try:
+        order_key = [i.lower() for i in header].index(order_by)
+    except ValueError:
+        return filtered_data
+
+    return sorted(filtered_data, key=itemgetter(order_key), reverse=True)
+
+
+class EC2Parser:
+    def __init__(self, ec2) -> None:
+        self.ec2 = ec2
+
+    def status(self, order_by: str, env: str, color: bool, tablefmt: str):
+        self.color = color
+        self.tablefmt = tablefmt
+
+        described_instances: Dict = self.ec2.describe_instances()
+        ec2_data = described_instances.get("Reservations")
+
+        if ec2_data:
+            parsed_data = self._parse_api_data(ec2_data)
+            parsed_data = sort_parsed_data(parsed_data, order_by, env)
+            self._show_parsed_data(parsed_data)
+
+    def _parse_api_data(self, data: Dict) -> List[List]:
+        instances_data = []
+        for instances in data:
+            for instance in instances.get("Instances"):
+                instances_data.append(self._parse_instance_data(instance))
+
+        return instances_data
+
+    def _show_parsed_data(self, data: List[List]) -> None:
+        header = INSTANCES_TABLE_HEADERS_FANCY if self.color else INSTANCES_TABLE_HEADERS
+        print(tabulate(data, header, tablefmt=self.tablefmt))
+
+    def _parse_instance_data(self, instance_data: Dict) -> List:
+        instance_id = instance_data.get("InstanceId")
+
+        tags = self._get_instance_tags(instance_data.get("Tags"))
+        instance_name = tags.get("Name")
+        instance_env = tags.get("environment")
+
+        state_name, state_code = self._get_instance_state(instance_data.get("State"))
+
+        correct_state_time = self._get_correct_state_key(instance_data=instance_data)
+        state_time = self._get_instance_state_time(correct_state_time, state_code)
+
+        ip_addr = instance_data.get("PublicIpAddress")
+        public_ip_addr = ip_addr if ip_addr else NONE_STR
+
+        row = [instance_name, state_name, state_time, public_ip_addr, instance_env, instance_id]
+
+        return row
+
+    def _get_instance_tags(self, tags: List) -> Dict[str, str]:
+        parsed_tags = {"Name": NONE_STR, "environment": NONE_STR}
+        for tag in tags:
+            parsed_tags[tag["Key"]] = tag["Value"]
+
+        return parsed_tags
+
+    def _get_instance_state(self, state: dict) -> Tuple[str, int]:
+        state_name = state.get("Name")
+        state_code = state.get("Code")
+
+        if self.color:
+            on: bool = True if state_code == STATE_CODE_RUNNING else False
+            state_name = make_it_shine(Fore.GREEN, state_name) if on else make_it_shine(Fore.RED, state_name)
+
+        return (state_name, state_code)
+
+    def _get_correct_state_key(self, instance_data: Dict) -> Union[str, datetime]:
+        reason = instance_data.get("StateTransitionReason")
+        launch_time = instance_data.get("LaunchTime")
+        return launch_time if not reason else reason
+
+    def _get_instance_state_time(self, time: datetime, state_code: int) -> str:
+
+        if state_code == STATE_CODE_RUNNING:
+            running_time: timedelta = datetime.now(timezone.utc) - time
+            return td_format(running_time)
+
+        elif state_code == STATE_CODE_STOPPED:
+            pattern = r"^.*\((.*)\).*$"
+            match = re.search(pattern, time)
+            regex_match = match.group(1)
+            parsed_time = parser.parse(regex_match)
+            not_running_time: timedelta = datetime.now(timezone.utc) - parsed_time
+            return td_format(not_running_time)
+
+        return "No Info"
+
+
+class RDSParser:
+    def __init__(self, rds) -> None:
+        self.rds = rds
+
+    def status(self, order_by: str, env: str, color: bool, tablefmt: str):
+        self.color = color
+        self.tablefmt = tablefmt
+
+        described_db_instances: Dict = self.rds.describe_db_instances()
+
+        rds_data = described_db_instances.get("DBInstances")
+
+        if rds_data:
+            parsed_data = self._parse_rds_api_data(rds_data)
+            parsed_data = sort_parsed_data(parsed_data, order_by, env, rds=True)
+            self._show_parsed_rds_data(parsed_data)
+
+    def _parse_rds_api_data(self, data: Dict) -> List[List]:
+        db_instances_data = []
+        for instance in data:
+            db_instances_data.append(self._parse_db_instance_data(instance))
+
+        return db_instances_data
+
+    def _show_parsed_rds_data(self, data: List[List]) -> None:
+        header = DB_INSTANCES_TABLE_HEADERS_FANCY if self.color else DB_INSTANCES_TABLE_HEADERS
+        print(tabulate(data, header, tablefmt=self.tablefmt))
+
+    def _parse_db_instance_data(self, instance_data: Dict) -> List:
+        instance_name = instance_data.get("DBInstanceIdentifier")
+        state = self._get_db_instance_state(instance_data.get("DBInstanceStatus"))
+        instance_address, instance_port = self._get_instance_endpoint(instance_data.get("Endpoint"))
+
+        row = [instance_name, state, instance_address, instance_port]
+        return row
+
+    def _get_db_instance_state(self, state: str) -> str:
+        if self.color:
+            on: bool = True if state == DB_STATE_RUNNING else False
+            state = make_it_shine(Fore.GREEN, state) if on else make_it_shine(Fore.RED, state)
+        return state
+
+    def _get_instance_endpoint(self, endpoint_data: Dict) -> Tuple[str, int]:
+        return (endpoint_data.get("Address"), endpoint_data.get("Port"))
