@@ -1,7 +1,7 @@
 import re
+import sys
 from datetime import datetime, timedelta, timezone
 from operator import itemgetter
-import sys
 from typing import Dict, List, Tuple, Union
 
 from colorama import Back, Fore, Style
@@ -92,7 +92,7 @@ class EC2Service:
             header = INSTANCES_TABLE_HEADERS_FANCY if self.color else INSTANCES_TABLE_HEADERS
             print(tabulate(data, header, tablefmt=tablefmt))
             return
-        
+
         for instance_data in data:
             print(f"{separ}".join(instance_data))
 
@@ -192,12 +192,12 @@ class RDSService:
             header = DB_INSTANCES_TABLE_HEADERS_FANCY if self.color else DB_INSTANCES_TABLE_HEADERS
             print(tabulate(data, header, tablefmt=tablefmt))
             return
-        
+
         for instance_data in data:
             print(f"{separ}".join(instance_data))
 
     def _parse_db_instance_data(self, instance_data: Dict) -> List:
-        instance_name = instance_data.get("DBInstanceIdentifier")
+        instance_name = instance_data.get("DBClusterIdentifier", NONE_STR)
         state = self._get_db_instance_state(instance_data.get("DBInstanceStatus"))
         instance_address, instance_port = self._get_instance_endpoint(instance_data.get("Endpoint"))
 
