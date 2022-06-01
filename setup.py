@@ -18,7 +18,7 @@ URL = 'https://github.com/hntirgeam/aws-dashboard'
 EMAIL = 'me@example.com'
 AUTHOR = "hntirgeam"
 REQUIRES_PYTHON = '>=3.8'
-VERSION = '0.0.9'
+VERSION = '0.0.10'
 
 # What packages are required for this module to be executed?
 REQUIRED = ["boto3", "click", "colorama", "python-dateutil", "tabulate"]

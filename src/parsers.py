@@ -48,17 +48,23 @@ def td_format(td_object):
     return " ".join(strings)
 
 
-def sort_parsed_data(data: List[List], order_by: str, env: str, rds: bool = False) -> List[List]:
+def sort_parsed_data(data: List[List], order_by: str, env: str, state: str, rds: bool = False) -> List[List]:
     """Sorts parsed data for both EC2 and RDS instancies."""
     filtered_data = []
 
     header = INSTANCES_TABLE_HEADERS if not rds else DB_INSTANCES_TABLE_HEADERS
-    header_inxed = "Env" if not rds else "Address"
+    header_inxed_env = "Env" if not rds else "Address"
 
     if env != "all":
         for item in data:
-            if item[header.index(header_inxed)].find(env) != -1:
+            if item[header.index(header_inxed_env)].find(env) != -1:
                 filtered_data.append(item)
+
+    if state != "all":
+        for item in data:
+            if state.lower() in item[header.index("State")]:
+                filtered_data.append(item)
+
     else:
         filtered_data = data
 

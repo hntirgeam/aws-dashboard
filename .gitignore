@@ -1,4 +1,5 @@
 venv/
 build/
 dist/
-aws_monitor.*/
+aws_dashboard.*/
+*__pycache__*

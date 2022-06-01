@@ -12,6 +12,7 @@ COLOR_HELP_STR = "Old style shell"
 TABLE_STYLE_HELP_STR = "Table style. Options: plain, simple, github, grid, etc. (check tabulate doc)"
 SH_COMPATIBLE_HELP_STR = "Prints as lines of code that would be easier to parse using sh/bash scripts."
 SH_SEPARATOR_HELP_STR = "Defines separator for sh-compatible output. Defaults to `|`"
+STATE_HELP_STR = "Shows only <state name> instances"
 ACTION_STR = "This action will {} listed {} instance(s):"
 ERROR_STR = "Something went wrong. Check this out"
 BOTO3_CONFIG_ERROR_STR = (
@@ -25,18 +26,21 @@ def cli():
 
 
 @cli.command()
-@click.option("--no-db", default=True, is_flag=True, help=DB_HELP_STR)
+@click.option("--no-db", default=False, is_flag=True, help=DB_HELP_STR)
 @click.option("--order", default="state", help=ORDER_HELP_STR)
 @click.option("--env", default="all", help=ENV_HELP_STR.format("List"))
+@click.option("--state", default="all", help=STATE_HELP_STR)
 @click.option("--no-color", default=False, is_flag=True, help=COLOR_HELP_STR)
 @click.option("--table", default="psql", help=TABLE_STYLE_HELP_STR)
 @click.option("--sh", default=False, is_flag=True, help=SH_COMPATIBLE_HELP_STR)
 @click.option("--sh-separator", default="|", help=SH_SEPARATOR_HELP_STR)
 def status(**kwargs):
     no_color = kwargs.get("no_color")
-    show_db_table = kwargs.get("db")
+    show_db_table = kwargs.get("no_db")
+    show_db_table = not show_db_table
     order_by = kwargs.get("order")
     env = kwargs.get("env")
+    state = kwargs.get("state")
     tablefmt = kwargs.get("table")
 
     sh_compatible_output = kwargs.get("sh")
@@ -48,14 +52,20 @@ def status(**kwargs):
 
     ec2_parser = EC2Service(ec2, color=color)
     parsed_ec2_data = ec2_parser.parse_data()
-    sorted_ec2_data = sort_parsed_data(parsed_ec2_data, order_by=order_by, env=env)
-    ec2_parser.show_parsed_data(data=sorted_ec2_data, tablefmt=tablefmt, sh=sh_compatible_output, separ=sh_sep)
+    sorted_ec2_data = sort_parsed_data(parsed_ec2_data, order_by=order_by, env=env, state=state)
+    if sorted_ec2_data:
+        ec2_parser.show_parsed_data(data=sorted_ec2_data, tablefmt=tablefmt, sh=sh_compatible_output, separ=sh_sep)
+    elif not sh_compatible_output:
+        print("No EC2 data found!")
 
     if show_db_table:
         rds_parser = RDSService(rds, color=color)
         parsed_rds_data = rds_parser.parse_data()
-        sorted_rds_data = sort_parsed_data(parsed_rds_data, order_by=order_by, env=env, rds=True)
-        rds_parser.show_parsed_data(data=sorted_rds_data, tablefmt=tablefmt, sh=sh_compatible_output, separ=sh_sep)
+        sorted_rds_data = sort_parsed_data(parsed_rds_data, order_by=order_by, env=env, state=state, rds=True)
+        if sorted_rds_data:
+            rds_parser.show_parsed_data(data=sorted_rds_data, tablefmt=tablefmt, sh=sh_compatible_output, separ=sh_sep)
+        elif not sh_compatible_output:
+            print("No RDS data found!")
 
 
 @cli.command()
