@@ -25,7 +25,7 @@ def cli():
 
 
 @cli.command()
-@click.option("--db", default=True, is_flag=True, help=DB_HELP_STR)
+@click.option("--no-db", default=True, is_flag=True, help=DB_HELP_STR)
 @click.option("--order", default="state", help=ORDER_HELP_STR)
 @click.option("--env", default="all", help=ENV_HELP_STR.format("List"))
 @click.option("--no-color", default=False, is_flag=True, help=COLOR_HELP_STR)
