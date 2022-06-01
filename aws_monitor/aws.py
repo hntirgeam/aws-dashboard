@@ -2,7 +2,7 @@ import boto3
 import click
 from colorama import init as windows_color_init
 
-from parsers import DB_INSTANCES_TABLE_HEADERS, INSTANCES_TABLE_HEADERS, EC2Service, RDSService, sort_parsed_data
+from .parsers import DB_INSTANCES_TABLE_HEADERS, INSTANCES_TABLE_HEADERS, EC2Service, RDSService, sort_parsed_data
 
 ACTION_HELP_STR = "Actions"
 DB_HELP_STR = "Show DB instances table"
@@ -166,7 +166,7 @@ def bulk_stop(env):
                     print(f"{ERROR_STR}:{e}")
 
 
-if __name__ == "__main__":
+def main():
     global ec2, rds
 
     try:
@@ -177,3 +177,7 @@ if __name__ == "__main__":
         exit(1)
 
     cli()
+
+
+if __name__ == "__main__":
+    main()
