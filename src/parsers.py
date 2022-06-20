@@ -16,10 +16,10 @@ DB_STATE_RUNNING = "available"
 
 NONE_STR = "<None>"
 
-INSTANCES_TABLE_HEADERS = ("Name", "State", "State Time", "Public IP", "Env", "Id")
-DB_INSTANCES_TABLE_HEADERS = ("Name", "State", "Address", "Port")
+INSTANCES_TABLE_HEADERS = ("Name", "State", "State Time", "Address", "Env", "Id")
+DB_INSTANCES_TABLE_HEADERS = ("Name", "State", "Address", "Env", "Port")
 
-AVAILABLE_SORTING_RULES = INSTANCES_TABLE_HEADERS + DB_INSTANCES_TABLE_HEADERS
+AVAILABLE_SORTING_RULES = ", ".join(sorted([t for t in set(INSTANCES_TABLE_HEADERS + DB_INSTANCES_TABLE_HEADERS)]))
 
 INSTANCES_TABLE_HEADERS_FANCY = [Fore.BLACK + Back.CYAN + h + Style.RESET_ALL for h in INSTANCES_TABLE_HEADERS]
 DB_INSTANCES_TABLE_HEADERS_FANCY = [Fore.BLACK + Back.CYAN + h + Style.RESET_ALL for h in DB_INSTANCES_TABLE_HEADERS]
@@ -50,30 +50,33 @@ def td_format(td_object):
 
 def sort_parsed_data(data: List[List], order_by: str, env: str, state: str, rds: bool = False) -> List[List]:
     """Sorts parsed data for both EC2 and RDS instancies."""
-    filtered_data = []
-
     header = INSTANCES_TABLE_HEADERS if not rds else DB_INSTANCES_TABLE_HEADERS
-    header_inxed_env = "Env" if not rds else "Address"
+
+    sorted_data = []
 
     if env != "all":
-        for item in data:
-            if item[header.index(header_inxed_env)].find(env) != -1:
-                filtered_data.append(item)
+        sorted_data = filter(lambda i: i[header.index("Env")].find(env) >= 0, data)
 
     if state != "all":
-        for item in data:
-            if state.lower() in item[header.index("State")]:
-                filtered_data.append(item)
+        sorted_data = filter(lambda i: state.lower() in i[header.index("State")], sorted_data if sorted_data else data)
 
-    else:
-        filtered_data = data
+    if not sorted_data:
+        sorted_data = data
 
     try:
         order_key = [i.lower() for i in header].index(order_by)
     except ValueError:
-        return filtered_data
+        return sorted_data
 
-    return sorted(filtered_data, key=itemgetter(order_key), reverse=True)
+    return sorted(sorted_data, key=itemgetter(order_key), reverse=True)
+
+
+def get_instance_tags(tags: List) -> Dict[str, str]:
+    parsed_tags = {"Name": NONE_STR, "environment": NONE_STR}
+    for tag in tags:
+        parsed_tags[tag["Key"]] = tag["Value"]
+
+    return parsed_tags
 
 
 class EC2Service:
@@ -113,7 +116,7 @@ class EC2Service:
     def _parse_instance_data(self, instance_data: Dict) -> List:
         instance_id = instance_data.get("InstanceId")
 
-        tags = self._get_instance_tags(instance_data.get("Tags"))
+        tags = get_instance_tags(instance_data.get("Tags"))
         instance_name = tags.get("Name")
         instance_env = tags.get("environment")
 
@@ -128,13 +131,6 @@ class EC2Service:
         row = [instance_name, state_name, state_time, public_ip_addr, instance_env, instance_id]
 
         return row
-
-    def _get_instance_tags(self, tags: List) -> Dict[str, str]:
-        parsed_tags = {"Name": NONE_STR, "environment": NONE_STR}
-        for tag in tags:
-            parsed_tags[tag["Key"]] = tag["Value"]
-
-        return parsed_tags
 
     def _get_instance_state(self, state: dict) -> Tuple[str, int]:
         state_name = state.get("Name")
@@ -207,7 +203,10 @@ class RDSService:
         state = self._get_db_instance_state(instance_data.get("DBInstanceStatus"))
         instance_address, instance_port = self._get_instance_endpoint(instance_data.get("Endpoint"))
 
-        row = [instance_name, state, instance_address, str(instance_port)]
+        tags = get_instance_tags(instance_data.get("TagList"))
+        instance_env = tags.get("environment")
+
+        row = [instance_name, state, instance_address, instance_env, str(instance_port)]
         return row
 
     def _get_db_instance_state(self, state: str) -> str:

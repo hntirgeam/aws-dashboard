@@ -2,11 +2,18 @@ import boto3
 import click
 from colorama import init as windows_color_init
 
-from .parsers import DB_INSTANCES_TABLE_HEADERS, INSTANCES_TABLE_HEADERS, EC2Service, RDSService, sort_parsed_data
+from parsers import (
+    DB_INSTANCES_TABLE_HEADERS,
+    INSTANCES_TABLE_HEADERS,
+    AVAILABLE_SORTING_RULES as ASR,
+    EC2Service,
+    RDSService,
+    sort_parsed_data,
+)
 
 ACTION_HELP_STR = "Actions"
 DB_HELP_STR = "Show DB instances table"
-ORDER_HELP_STR = "Table sorting. Options: table header lowercase (e.g. `state name`)"
+ORDER_HELP_STR = f"Table sorting. Options: table header lowercase (e.g. `state name`). Available sorting rules: {ASR}"
 ENV_HELP_STR = "{} only instances that match specified env"
 COLOR_HELP_STR = "Old style shell"
 TABLE_STYLE_HELP_STR = "Table style. Options: plain, simple, github, grid, etc. (check tabulate doc)"
