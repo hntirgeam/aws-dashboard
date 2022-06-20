@@ -3,3 +3,4 @@ build/
 dist/
 aws_dashboard.*/
 *__pycache__*
+.vscode/
