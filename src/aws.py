@@ -2,7 +2,7 @@ import boto3
 import click
 from colorama import init as windows_color_init
 
-from parsers import (
+from .parsers import (
     DB_INSTANCES_TABLE_HEADERS,
     INSTANCES_TABLE_HEADERS,
     AVAILABLE_SORTING_RULES as ASR,
