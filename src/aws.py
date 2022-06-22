@@ -12,7 +12,7 @@ from .parsers import (
 )
 
 ACTION_HELP_STR = "Actions"
-DB_HELP_STR = "Show DB instances table"
+DB_HELP_STR = "Do not show DB instances table"
 ORDER_HELP_STR = f"Table sorting. Options: table header lowercase (e.g. `state name`). Available sorting rules: {ASR}"
 ENV_HELP_STR = "{} only instances that match specified env"
 COLOR_HELP_STR = "Old style shell"
@@ -85,7 +85,7 @@ def start(ids):
         response = ec2.start_instances(InstanceIds=ids, DryRun=False)
         print(response)
     except Exception as e:
-        print(f"{ERROR_STR}:{e}")
+        print(f"{ERROR_STR}:\n{e}")
 
 
 @cli.command()
@@ -98,7 +98,33 @@ def stop(ids):
         response = ec2.stop_instances(InstanceIds=ids, DryRun=False)
         print(response)
     except Exception as e:
-        print(f"{ERROR_STR}:{e}")
+        print(f"{ERROR_STR}:\n{e}")
+
+
+@cli.command()
+@click.argument("ids", nargs=-1)
+def start_rds(ids):
+    ids = list(dict.fromkeys(ids))
+    if click.confirm(f"\nYou have choosen {ids}.\nDo you want to continue?", default=False):
+        for cluster in ids:
+            try:
+                rds.start_db_cluster(DBClusterIdentifier=cluster)
+                print(f"Started {cluster}")
+            except Exception as e:
+                print(f"{ERROR_STR}:\n{e}")
+
+
+@cli.command()
+@click.argument("ids", nargs=-1)
+def stop_rds(ids):
+    ids = list(dict.fromkeys(ids))
+    if click.confirm(f"\nYou have choosen {ids}.\nDo you want to continue?", default=False):
+        for cluster in ids:
+            try:
+                rds.stop_db_cluster(DBClusterIdentifier=cluster)
+                print(f"Started {cluster}")
+            except Exception as e:
+                print(f"{ERROR_STR}:\n{e}")
 
 
 @cli.command()
@@ -130,7 +156,7 @@ def bulk_start(env):
             response = ec2.start_instances(InstanceIds=[i[id_index] for i in sorted_ec2_data], DryRun=False)
             print(response)
         except Exception as e:
-            print(f"{ERROR_STR}:{e}")
+            print(f"{ERROR_STR}:\n{e}")
 
         try:
             identifier_index = DB_INSTANCES_TABLE_HEADERS.index("Name")
@@ -138,7 +164,7 @@ def bulk_start(env):
                 response = rds.start_db_cluster(DBClusterIdentifier=cluster[identifier_index])
                 print(response)
         except Exception as e:
-            print(f"{ERROR_STR}:{e}")
+            print(f"{ERROR_STR}:\n{e}")
 
 
 @cli.command()
@@ -160,8 +186,8 @@ def bulk_stop(env):
 
     if sorted_rds_data:
         print(ACTION_STR.format("stop", "RDS"))
-        for server in sorted_rds_data:
-            print(server[0])
+        for cluster in sorted_rds_data:
+            print(cluster[0])
         print()
 
     if click.confirm("Do you want to stop listed instance(s)?"):
@@ -172,7 +198,7 @@ def bulk_stop(env):
                     response = ec2.stop_instances(InstanceIds=[i[id_index] for i in sorted_ec2_data], DryRun=False)
                     print(response)
                 except Exception as e:
-                    print(f"{ERROR_STR}:{e}")
+                    print(f"{ERROR_STR}:\n{e}")
 
                 try:
                     identifier_index = DB_INSTANCES_TABLE_HEADERS.index("Name")
@@ -180,7 +206,7 @@ def bulk_stop(env):
                         response = rds.stop_db_cluster(DBClusterIdentifier=cluster[identifier_index])
                         print(response)
                 except Exception as e:
-                    print(f"{ERROR_STR}:{e}")
+                    print(f"{ERROR_STR}:\n{e}")
 
 
 def main():

@@ -17,7 +17,7 @@ DB_STATE_RUNNING = "available"
 NONE_STR = "<None>"
 
 INSTANCES_TABLE_HEADERS = ("Name", "State", "State Time", "Address", "Env", "Id")
-DB_INSTANCES_TABLE_HEADERS = ("Name", "State", "Address", "Env", "Port")
+DB_INSTANCES_TABLE_HEADERS = ("Name", "State", "Address", "Port", "Env")
 
 AVAILABLE_SORTING_RULES = ", ".join(sorted([t for t in set(INSTANCES_TABLE_HEADERS + DB_INSTANCES_TABLE_HEADERS)]))
 
@@ -48,14 +48,14 @@ def td_format(td_object):
     return " ".join(strings)
 
 
-def sort_parsed_data(data: List[List], order_by: str, env: str, state: str, rds: bool = False) -> List[List]:
+def sort_parsed_data(data: List[List], order_by: str, env: str, state: str = "all", rds: bool = False) -> List[List]:
     """Sorts parsed data for both EC2 and RDS instancies."""
     header = INSTANCES_TABLE_HEADERS if not rds else DB_INSTANCES_TABLE_HEADERS
 
     sorted_data = []
 
     if env != "all":
-        sorted_data = filter(lambda i: i[header.index("Env")].find(env) >= 0, data)
+        sorted_data = filter(lambda i: i[header.index("Env")] == env, data)
 
     if state != "all":
         sorted_data = filter(lambda i: state.lower() in i[header.index("State")], sorted_data if sorted_data else data)
@@ -199,14 +199,16 @@ class RDSService:
             print(f"{separ}".join(instance_data))
 
     def _parse_db_instance_data(self, instance_data: Dict) -> List:
-        instance_name = instance_data.get("DBClusterIdentifier", NONE_STR)
+        cluster_identifier = instance_data.get("DBClusterIdentifier")
+        instance_identifier = instance_data.get("DBInstanceIdentifier")
+        instance_name = cluster_identifier if cluster_identifier else instance_identifier
         state = self._get_db_instance_state(instance_data.get("DBInstanceStatus"))
         instance_address, instance_port = self._get_instance_endpoint(instance_data.get("Endpoint"))
 
         tags = get_instance_tags(instance_data.get("TagList"))
         instance_env = tags.get("environment")
 
-        row = [instance_name, state, instance_address, instance_env, str(instance_port)]
+        row = [instance_name, state, instance_address, instance_port, instance_env]
         return row
 
     def _get_db_instance_state(self, state: str) -> str:
